@@ -5,7 +5,7 @@ import Graphics.UI.Gtk
 import Numeric(showHex)
 
 import System.Environment
-import System.IO
+import System.IO hiding (hGetContents)
 import System.Directory
 import System.Exit
 
@@ -13,8 +13,9 @@ import Prelude hiding (readFile)
 
 import Control.Monad
 import Data.List
-import Data.Map
+import Data.Map hiding (map)
 import Data.Binary
+import Data.ByteString.Lazy(hGetContents, hPut)
 import Data.IORef
 
 --import Codec.Binary.UTF8.String
@@ -157,9 +158,8 @@ tooltipCaptionForChar [c] = ("U+"++) . showHex (fromEnum c) $""
 tooltipCaptionForChar str = str
 
 
-data CharmapWindow = CharmapWindow Window (IORef UsageStatistics)
 
-charmapWindow :: [String] -> IO CharmapWindow
+charmapWindow :: [String] -> IO Window
 charmapWindow charstrs = do
     window <- windowNew
     globXClipbrd <- clipboardGet selectionClipboard
@@ -172,7 +172,7 @@ charmapWindow charstrs = do
           tooltipsSetTip tooltips b (tooltipCaptionForChar cs) cs
           on b buttonActivated $ do
              clipboardSetText globXClipbrd cs
-             modifyIORef localStatistics $ insertWith(+) cs
+             modifyIORef localStatistics $ insertWith(+) cs 1
           return b
     set hbuttonbox [ containerChild:=button | button <- charbuttons ]
                                               -- widgetDestroy window
@@ -188,11 +188,11 @@ charmapWindow charstrs = do
                , windowResizable := False
                , containerChild := hbuttonbox
                ]
-    on window destroy $ addToStatistics =<< readIORef localStatistics
+    onDestroy window $ addToStatistics =<< readIORef localStatistics
     
     widgetShowAll window
     windowSetKeepAbove window True
-    return $ CharmapWindow window localStatistics
+    return window
 
 
 
@@ -205,8 +205,13 @@ firstTimeLaunchPreps = do
 type UsageStatistics = Map String Int
 
 addToStatistics :: UsageStatistics -> IO ()
-addToStatistics newUses
-   = writeStatisticsFile . unionWith(+) newUses =<< readStatisticsFile
+addToStatistics newUses = do
+   stfp <- statFilePath
+   statsExist <- doesFileExist stfp
+   if statsExist
+    then withFile stfp ReadWriteMode $ \h ->
+           hPut h . encode . unionWith(+) newUses . decode =<< hGetContents h
+    else writeStatisticsFile newUses
 
 readStatisticsFile :: IO UsageStatistics
 readStatisticsFile = do
@@ -216,11 +221,8 @@ readStatisticsFile = do
     else return empty
     
 writeStatisticsFile :: UsageStatistics -> IO ()
-writeStatisticsFile = statFilePath >>= encodeFile
+writeStatisticsFile stats = statFilePath >>= (`encodeFile`stats)
 
-getStatistics :: Get UsageStatistics
-getStatistics = fmap fromAscList $ do
-   
 
 statFilePath :: IO FilePath
 statFilePath = fmap (++"/statistics") myDirectory
