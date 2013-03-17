@@ -1,7 +1,7 @@
 module Main (main) where
 
 import Graphics.UI.Gtk hiding (on)
-import qualified System.Glib.Signals (on)
+import qualified System.Glib.Signals (on) -- clashes with 'Data.Function.on'
 
 import Numeric(showHex)
 
@@ -218,7 +218,7 @@ readStatisticsFile :: IO UsageStatistics
 readStatisticsFile = do
    statsExist <- doesFileExist =<< statFilePath
    if statsExist
-    then decodeFileStrict =<< statFilePath
+    then decodeFileStrict =<< statFilePath  -- needs to be strict to avoid a deadlock when using 'addToStatistics'.
     else return empty
     
 writeStatisticsFile :: UsageStatistics -> IO ()
