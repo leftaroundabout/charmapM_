@@ -1,24 +1,36 @@
 module Main (main) where
 
 import Graphics.UI.Gtk
+
+import Numeric(showHex)
+
+import System.Environment
+import System.IO
+import System.Directory
+import System.Exit
+
+import Prelude hiding (readFile)
+
 import Control.Monad
 import Data.List
-import Numeric(showHex)
-import System.Environment
-import System.Exit
+import Data.Map
+import Data.Binary
+import Data.IORef
+
 --import Codec.Binary.UTF8.String
 
 
 main :: IO ()
 main = do
-  args <- getArgs
---  let dcdargs = map decodeString args   -- With ghc7.4, UTF8-encoding
-  --mapM_ putStrLn dcdargs                -- seems to work automatically.
---  mapM_ (putStrLn . intersperse '\n') dcdargs
-  --exitSuccess
-  if length args == 0
-     then showMainWindow
-     else showByCommandArgs args
+   firstTimeLaunchPreps
+   args <- getArgs
+ --  let dcdargs = map decodeString args   -- With ghc7.4, UTF8-encoding
+   --mapM_ putStrLn dcdargs                -- seems to work automatically.
+ --  mapM_ (putStrLn . intersperse '\n') dcdargs
+   --exitSuccess
+   if length args == 0
+      then showMainWindow
+      else showByCommandArgs args
 
 
 showMainWindow :: IO ()
@@ -144,21 +156,25 @@ tooltipCaptionForChar :: String -> String
 tooltipCaptionForChar [c] = ("U+"++) . showHex (fromEnum c) $""
 tooltipCaptionForChar str = str
 
-charmapWindow :: [String] -> IO Window
+
+data CharmapWindow = CharmapWindow Window (IORef UsageStatistics)
+
+charmapWindow :: [String] -> IO CharmapWindow
 charmapWindow charstrs = do
     window <- windowNew
     globXClipbrd <- clipboardGet selectionClipboard
     hbuttonbox <- hBoxNew False 1
     tooltips <- tooltipsNew
-    charbuttons <- mapM (\cs->do
+    localStatistics <- newIORef empty
+    charbuttons <- forM charstrs $ \cs->do
           b <- buttonNewWithLabel cs
           set b [ buttonFocusOnClick := False ]
           tooltipsSetTip tooltips b (tooltipCaptionForChar cs) cs
-          on b buttonActivated $ clipboardSetText globXClipbrd cs
+          on b buttonActivated $ do
+             clipboardSetText globXClipbrd cs
+             modifyIORef localStatistics $ insertWith(+) cs
           return b
-      ) charstrs
-    set hbuttonbox [ containerChild := button
-                   | button <- charbuttons ]
+    set hbuttonbox [ containerChild:=button | button <- charbuttons ]
                                               -- widgetDestroy window
     let windowTtlSmmry = join . intersperse isps $ charstrs
            where isps = if any ((>1) . length) charstrs
@@ -172,10 +188,42 @@ charmapWindow charstrs = do
                , windowResizable := False
                , containerChild := hbuttonbox
                ]
+    on window destroy $ addToStatistics =<< readIORef localStatistics
+    
     widgetShowAll window
     windowSetKeepAbove window True
-    return window
+    return $ CharmapWindow window localStatistics
 
 
 
+firstTimeLaunchPreps :: IO()
+firstTimeLaunchPreps = do
+   createDirectoryIfMissing False =<< myDirectory
 
+
+
+type UsageStatistics = Map String Int
+
+addToStatistics :: UsageStatistics -> IO ()
+addToStatistics newUses
+   = writeStatisticsFile . unionWith(+) newUses =<< readStatisticsFile
+
+readStatisticsFile :: IO UsageStatistics
+readStatisticsFile = do
+   statsExist <- doesFileExist =<< statFilePath
+   if statsExist
+    then decodeFile =<< statFilePath
+    else return empty
+    
+writeStatisticsFile :: UsageStatistics -> IO ()
+writeStatisticsFile = statFilePath >>= encodeFile
+
+getStatistics :: Get UsageStatistics
+getStatistics = fmap fromAscList $ do
+   
+
+statFilePath :: IO FilePath
+statFilePath = fmap (++"/statistics") myDirectory
+
+myDirectory :: IO FilePath
+myDirectory = fmap (++"/.charmapM_") getHomeDirectory
