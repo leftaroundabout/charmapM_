@@ -1,21 +1,25 @@
 module Main (main) where
 
-import Graphics.UI.Gtk
+import Graphics.UI.Gtk hiding (on)
+import qualified System.Glib.Signals (on)
 
 import Numeric(showHex)
 
 import System.Environment
-import System.IO hiding (hGetContents)
+import System.IO
 import System.Directory
 import System.Exit
 
 import Prelude hiding (readFile)
 
 import Control.Monad
+import Data.Function
+
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import Data.List
-import Data.Map hiding (map)
+import Data.Map hiding (map, filter)
 import Data.Binary
-import Data.ByteString.Lazy(hGetContents, hPut)
 import Data.IORef
 
 --import Codec.Binary.UTF8.String
@@ -51,24 +55,26 @@ showMainWindow = do
 
 showByCommandArgs :: [String] -> IO ()
 showByCommandArgs strs = do
-    if elem strs [["-h"],["--help"]]
-      then do
+    when (elem strs [["-h"],["--help"]]) $ do
        mapM_ putStrLn [
           "Usage: charmapM_ [option] [charmap] ..."
         , "Show character maps as small gtk+ palettes."
         , ""
         , "Options:"
-        , "  -w, --words      Create a single charmap with whole words to copy,"
-        , "                   rather than multiple charmaps with single characters."
-        , "  -h, --help       Print this message and exit."
+        , "  -w, --words              Create a single charmap with whole words to copy,"
+        , "                           rather than multiple charmaps with single characters."
+        , "  -f [N], --favourites [N] Display a palette of the N mostly-used strings."
+        , "  -h, --help               Print this message and exit."
         ]
        exitSuccess
-      else return()
+       
     m_initGUI
-    let chrmapArgs = case head strs of
-                      "-w"      -> [tail strs]
-                      "--words" -> [tail strs]
-                      fstr      -> map(map return) strs
+    chrmapArgs <- case head strs of
+                      "-w"      -> return [tail strs]
+                      "--words" -> return [tail strs]
+                      "-f"      -> fmap (:[]) . favourites . read $ strs!!1
+                      "--favourites" -> fmap (:[]) . favourites . read $ strs!!1
+                      fstr      -> return $ map(map (:[])) strs
     windows <- mapM charmapWindow chrmapArgs
     mapM_ (flip onDestroy mainQuit) windows
     mainGUI
@@ -139,7 +145,7 @@ showHelpWindow = do
     globXClipbrd <- clipboardGet selectionClipboard
     let helpText = "This ℏelp text can be found here!"
     helpTextButton <- buttonNewWithLabel helpText
-    on helpTextButton buttonActivated $ clipboardSetText globXClipbrd helpText
+    onSig helpTextButton buttonActivated $ clipboardSetText globXClipbrd helpText
                                               -- widgetDestroy window
     set window [ windowTitle := "Help"
                , containerChild := helpTextButton
@@ -170,7 +176,7 @@ charmapWindow charstrs = do
           b <- buttonNewWithLabel cs
           set b [ buttonFocusOnClick := False ]
           tooltipsSetTip tooltips b (tooltipCaptionForChar cs) cs
-          on b buttonActivated $ do
+          onSig b buttonActivated $ do
              clipboardSetText globXClipbrd cs
              modifyIORef localStatistics $ insertWith(+) cs 1
           return b
@@ -205,23 +211,22 @@ firstTimeLaunchPreps = do
 type UsageStatistics = Map String Int
 
 addToStatistics :: UsageStatistics -> IO ()
-addToStatistics newUses = do
-   stfp <- statFilePath
-   statsExist <- doesFileExist stfp
-   if statsExist
-    then withFile stfp ReadWriteMode $ \h ->
-           hPut h . encode . unionWith(+) newUses . decode =<< hGetContents h
-    else writeStatisticsFile newUses
+addToStatistics newUses
+   = writeStatisticsFile . unionWith(+) newUses =<< readStatisticsFile
 
 readStatisticsFile :: IO UsageStatistics
 readStatisticsFile = do
    statsExist <- doesFileExist =<< statFilePath
    if statsExist
-    then decodeFile =<< statFilePath
+    then decodeFileStrict =<< statFilePath
     else return empty
     
 writeStatisticsFile :: UsageStatistics -> IO ()
 writeStatisticsFile stats = statFilePath >>= (`encodeFile`stats)
+
+favourites :: Int -> IO [String]
+favourites n = fmap (map fst . take n . sortBy(compare`on`negate.snd) . toList)
+    readStatisticsFile
 
 
 statFilePath :: IO FilePath
@@ -229,3 +234,13 @@ statFilePath = fmap (++"/statistics") myDirectory
 
 myDirectory :: IO FilePath
 myDirectory = fmap (++"/.charmapM_") getHomeDirectory
+
+
+decodeFileStrict :: Binary a => FilePath -> IO a
+decodeFileStrict fn = do
+   contents <- B.readFile fn
+   return . decode $ BL.fromChunks [contents]
+   
+
+
+onSig = System.Glib.Signals.on
