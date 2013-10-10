@@ -63,6 +63,10 @@ showByCommandArgs strs = do
         , "Options:"
         , "  -w, --words              Create a single charmap with whole words to copy,"
         , "                           rather than multiple charmaps with single characters."
+        , "  -e, --escape-seqs        Treat the input as Haskell strings, allowing for "
+        , "                           escaping of special characters. Example:"
+        , "                                charmapM_ -e '\"\\n\\t\\182\"'"
+        , "                           will produce a newline, tab and '\182' character."
         , "  -f [N], --favourites [N] Display a palette of the N mostly-used strings."
         , "  -h, --help               Print this message and exit."
         ]
@@ -74,6 +78,8 @@ showByCommandArgs strs = do
                       "--words" -> return [tail strs]
                       "-f"      -> fmap (:[]) . favourites . read $ strs!!1
                       "--favourites" -> fmap (:[]) . favourites . read $ strs!!1
+                      "-e"      -> return . map(map (:[]) . read) $ tail strs
+                      "--escape-seqs" ->  return . map(map (:[]) . read) $ tail strs
                       fstr      -> return $ map(map (:[])) strs
     windows <- mapM charmapWindow chrmapArgs
     mapM_ (flip onDestroy mainQuit) windows
