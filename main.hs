@@ -204,6 +204,7 @@ charmapWindow charstrs = do
     
     widgetShowAll window
     windowSetKeepAbove window True
+    windowSetDecorated window False
     return window
 
 
