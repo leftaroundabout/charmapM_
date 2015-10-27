@@ -2,6 +2,7 @@ module Main (main) where
 
 import Graphics.UI.Gtk hiding (on)
 import qualified System.Glib.Signals (on) -- clashes with 'Data.Function.on'
+import Graphics.Rendering.Pango.Enums
 
 import Numeric(showHex)
 
@@ -186,7 +187,12 @@ charmapWindow charstrs = do
              clipboardSetText globXClipbrd cs
              modifyIORef localStatistics $ insertWith(+) cs 1
           return b
-    set hbuttonbox [ containerChild:=button | button <- charbuttons ]
+    exitbutton <- do
+          b <- buttonNewWithLabel "X"
+          widgetModifyBg b StateNormal (Color 128 0 0)
+          onSig b buttonActivated $ widgetDestroy window
+          return b
+    set hbuttonbox [ containerChild:=button | button <- exitbutton : charbuttons ]
                                               -- widgetDestroy window
     let windowTtlSmmry = join . intersperse isps $ charstrs
            where isps = if any ((>1) . length) charstrs
