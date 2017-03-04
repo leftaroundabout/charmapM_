@@ -19,6 +19,6 @@ executable charmapM_
   main-is:             Main.hs
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.8 && <4.9, gtk >=0.13 && <0.14, glib >=0.13 && <0.14, pango >=0.13 && <0.14, directory >=1.2 && <1.3, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, binary >=0.7 && <0.8
+  build-depends:       base >=4.8 && <4.9, gtk >=0.13 && <0.14, glib >=0.13 && <0.14, pango >=0.13 && <0.14, directory >=1.2 && <1.3, bytestring >=0.10 && <0.11, containers >=0.5 && <0.6, binary >=0.7 && <0.8, unicode-names >= 3.2 && < 3.3
   -- hs-source-dirs:      
   default-language:    Haskell2010

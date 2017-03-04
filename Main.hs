@@ -20,6 +20,7 @@ import qualified System.Glib.Signals (on) -- clashes with 'Data.Function.on'
 import Graphics.Rendering.Pango.Enums
 
 import Numeric(showHex)
+import Data.Char.Properties.Names
 
 import System.Environment
 import System.IO
@@ -182,7 +183,7 @@ getBufferFromClipboard = BufferFillMenuAction (\sfn -> do
   )
 
 tooltipCaptionForChar :: String -> String
-tooltipCaptionForChar [c] = ("U+"++) . showHex (fromEnum c) $""
+tooltipCaptionForChar [c] = ("U+"++) . showHex (fromEnum c) . (' ':) $ getCharacterName c
 tooltipCaptionForChar str = str
 
 
